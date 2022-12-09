@@ -72,7 +72,21 @@ internal static class Program
         serviceCollection
             .AddHttpClient<IUserLibraryClient, UserLibraryClient>()
             .ConfigurePrimaryHttpMessageHandler(DefaultHttpClientHandlerDelegate);
-
+        serviceCollection
+            .AddHttpClient<ITvShowsClient, TvShowsClient>()
+            .ConfigurePrimaryHttpMessageHandler(DefaultHttpClientHandlerDelegate);
+        serviceCollection
+            .AddHttpClient<IUserLibraryClient, UserLibraryClient>()
+            .ConfigurePrimaryHttpMessageHandler(DefaultHttpClientHandlerDelegate);
+        serviceCollection
+            .AddHttpClient<IItemsClient, ItemsClient>()
+            .ConfigurePrimaryHttpMessageHandler(DefaultHttpClientHandlerDelegate);
+        serviceCollection
+            .AddHttpClient<IVideosClient, VideosClient>()
+            .ConfigurePrimaryHttpMessageHandler(DefaultHttpClientHandlerDelegate);
+        serviceCollection
+            .AddHttpClient<ILibraryClient, LibraryClient>()
+            .ConfigurePrimaryHttpMessageHandler(DefaultHttpClientHandlerDelegate);
         // Add sample service
         serviceCollection.AddSingleton<SampleService>();
 

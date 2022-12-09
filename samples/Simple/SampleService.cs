@@ -2,6 +2,9 @@
 using System.Threading.Tasks;
 using Jellyfin.Sdk;
 using SystemException = Jellyfin.Sdk.SystemException;
+using System.Collections.Generic;
+using System.IO;
+using Newtonsoft.Json;
 
 namespace Simple;
 
@@ -14,24 +17,33 @@ public class SampleService
     private readonly ISystemClient _systemClient;
     private readonly IUserClient _userClient;
     private readonly IUserViewsClient _userViewsClient;
+    private readonly ITvShowsClient _tvShowsClient;
+    private readonly IUserLibraryClient _userLibraryClient;
+    private readonly IItemsClient _itemsClient;
+    private readonly IVideosClient _videosClient;
+    private readonly ILibraryClient _libraryClient;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SampleService"/> class.
-    /// </summary>
-    /// <param name="sdkClientSettings">Instance of the <see cref="_sdkClientSettings"/>.</param>
-    /// <param name="systemClient">Instance of the <see cref="ISystemClient"/> interface.</param>
-    /// <param name="userClient">Instance of the <see cref="IUserClient"/> interface.</param>
-    /// <param name="userViewsClient">Instance of the <see cref="IUserViewsClient"/> interface.</param>
     public SampleService(
         SdkClientSettings sdkClientSettings,
         ISystemClient systemClient,
         IUserClient userClient,
-        IUserViewsClient userViewsClient)
+        IUserViewsClient userViewsClient,
+        ITvShowsClient tvShowsClient,
+        IUserLibraryClient userLibraryClient,
+        IItemsClient itemsClient,
+        IVideosClient videosClient,
+        ILibraryClient libraryClient)
     {
         _sdkClientSettings = sdkClientSettings;
         _systemClient = systemClient;
         _userClient = userClient;
         _userViewsClient = userViewsClient;
+        _tvShowsClient = tvShowsClient;
+        _userLibraryClient = userLibraryClient;
+        _itemsClient = itemsClient;
+        _videosClient = videosClient;
+        _libraryClient = libraryClient;
+        
     }
 
     /// <summary>
@@ -48,7 +60,7 @@ public class SampleService
             // ex: https://demo.jellyfin.org/stable
             Console.Write("Server Url: ");
             var host = Console.ReadLine();
-
+            
             _sdkClientSettings.BaseUrl = host;
             try
             {
@@ -82,10 +94,8 @@ public class SampleService
             {
                 Console.Write("Username: ");
                 var username = Console.ReadLine();
-
                 Console.Write("Password: ");
                 var password = Console.ReadLine();
-
                 Console.WriteLine($"Logging into {_sdkClientSettings.BaseUrl}");
 
                 // Authenticate user.
@@ -110,8 +120,22 @@ public class SampleService
         }
         while (!validUser);
 
-        await PrintViews(userDto.Id)
+        
+        //await PrintViews(userDto.Id)
+        //    .ConfigureAwait(false);
+
+
+
+        var showName = "";
+        do
+        {
+            Console.Write("Show Name (or 'quit'): ");
+            showName = Console.ReadLine();
+            await PrintShowInfo(userDto.Id, showName)
             .ConfigureAwait(false);
+        } while (showName != "quit");
+
+
     }
 
     private async Task PrintViews(Guid userId)
@@ -130,6 +154,88 @@ public class SampleService
         {
             await Console.Error.WriteLineAsync("Error getting user views").ConfigureAwait(false);
             await Console.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
+        }
+    }
+    
+    private async Task PrintShowInfo(Guid userId, string showName)
+    {
+        try
+        {
+
+            var includeItemTypes = new BaseItemKind[]{BaseItemKind.Series};
+
+            var shows = await _itemsClient.GetItemsAsync(userId, includeItemTypes:includeItemTypes, recursive:true)
+                .ConfigureAwait(false);
+
+            
+            Console.WriteLine("Printing Items Stuff:");
+            BaseItemDto usedshow = default;
+
+            foreach (var show in shows.Items)
+            {
+                Console.WriteLine($"{show.Id} - {show.Name}");
+                if(show.Name == showName)
+                {
+                    usedshow = show;
+                    Console.WriteLine("found it!!!");
+                }
+            }
+
+            
+            var episodes = await _tvShowsClient.GetEpisodesAsync(usedshow.Id, enableImages:false);
+            Console.WriteLine("got eps!!!");
+            var paths = new List<string>();
+
+            foreach(var episode in episodes.Items)
+            {
+                Console.WriteLine($"{episode.Id} - {episode.Name} - {episode.RunTimeTicks}");
+                var path = $"{_libraryClient.GetDownloadUrl(episode.Id)}?api_key={_sdkClientSettings.AccessToken}";
+                paths.Add(path);
+                Console.WriteLine(path);
+
+            }
+
+            await MakeTvFile(paths, usedshow.Name);
+
+            //var usedep = episodes.Items[0];
+            
+            //Console.WriteLine(JsonSerializer.Serialize(usedep));
+            
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync("Error getting show info").ConfigureAwait(false);
+            await Console.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
+        }
+    }
+
+    private async Task MakeTvFile(List<string> paths, string name)
+    {
+        var channel = new Channel();
+        channel.Name = name;
+        channel.Number = 666;
+        channel.playlist.Clear();
+        foreach(var path in paths)
+        {
+            var entry = new PlaylistEntry();
+            entry.Path = path;
+            entry.PathType = PathType.ABSOLUTE;
+            entry.Length = -1;
+            channel.playlist.Add(entry);
+        }
+
+        Console.WriteLine($"Making channel: {channel.Name}");
+
+        //Console.WriteLine(channel.ToString());
+
+        var json = JsonConvert.SerializeObject(channel, Formatting.Indented);
+
+        //Console.WriteLine("JSON");
+        //Console.WriteLine(json);
+
+        using StreamWriter file = new($"{channel.Name}.tv");
+        {
+            await file.WriteAsync(json);
         }
     }
 }
