@@ -6,9 +6,10 @@ using System.Net.Mime;
 using System.Text;
 using System.Threading.Tasks;
 using Jellyfin.Sdk;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Simple;
+namespace TVSimulator.ChannelGenerator;
 
 internal static class Program
 {
@@ -19,7 +20,7 @@ internal static class Program
         // Initialize the sdk client settings. This only needs to happen once on startup.
         var sdkClientSettings = serviceProvider.GetRequiredService<SdkClientSettings>();
         sdkClientSettings.InitializeClientSettings(
-            "My-Jellyfin-Client",
+            "TV-Simulator-Channel-Generator",
             "0.0.1",
             "Sample Device",
             $"this-is-my-device-id-{Guid.NewGuid():N}");
@@ -60,6 +61,9 @@ internal static class Program
         // Add Jellyfin SDK services.
         serviceCollection
             .AddSingleton<SdkClientSettings>();
+        serviceCollection.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddJsonFile("appsettings.json", optional: true)
+            .Build().GetSection("Settings"));
         serviceCollection
             .AddHttpClient<ISystemClient, SystemClient>()
             .ConfigurePrimaryHttpMessageHandler(DefaultHttpClientHandlerDelegate);
