@@ -5,8 +5,10 @@ using SystemException = Jellyfin.Sdk.SystemException;
 using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
+using Microsoft.Extensions.Configuration;
+using System.Linq;
 
-namespace Simple;
+namespace TVSimulator.ChannelGenerator;
 
 /// <summary>
 /// Sample Jellyfin service.
@@ -14,34 +16,31 @@ namespace Simple;
 public class SampleService
 {
     private readonly SdkClientSettings _sdkClientSettings;
+    private readonly IConfiguration _configuration;
     private readonly ISystemClient _systemClient;
     private readonly IUserClient _userClient;
     private readonly IUserViewsClient _userViewsClient;
     private readonly ITvShowsClient _tvShowsClient;
-    private readonly IUserLibraryClient _userLibraryClient;
     private readonly IItemsClient _itemsClient;
-    private readonly IVideosClient _videosClient;
     private readonly ILibraryClient _libraryClient;
 
     public SampleService(
         SdkClientSettings sdkClientSettings,
+        IConfiguration configuration,
         ISystemClient systemClient,
         IUserClient userClient,
         IUserViewsClient userViewsClient,
         ITvShowsClient tvShowsClient,
-        IUserLibraryClient userLibraryClient,
         IItemsClient itemsClient,
-        IVideosClient videosClient,
         ILibraryClient libraryClient)
     {
         _sdkClientSettings = sdkClientSettings;
+        _configuration = configuration;
         _systemClient = systemClient;
         _userClient = userClient;
         _userViewsClient = userViewsClient;
         _tvShowsClient = tvShowsClient;
-        _userLibraryClient = userLibraryClient;
         _itemsClient = itemsClient;
-        _videosClient = videosClient;
         _libraryClient = libraryClient;
         
     }
@@ -53,13 +52,18 @@ public class SampleService
     public async Task RunAsync()
     {
         var validServer = false;
+        var hasConfig = _configuration != null;
         do
         {
             // Prompt for server url.
             // Url must be proto://host/path
             // ex: https://demo.jellyfin.org/stable
-            Console.Write("Server Url: ");
-            var host = Console.ReadLine();
+            var host = _configuration?.GetValue<string>("ServerUrl");
+            if (host == null)
+            {
+                Console.Write("Server Url: ");
+                host = Console.ReadLine();
+            }
             
             _sdkClientSettings.BaseUrl = host;
             try
@@ -92,10 +96,18 @@ public class SampleService
         {
             try
             {
-                Console.Write("Username: ");
-                var username = Console.ReadLine();
-                Console.Write("Password: ");
-                var password = Console.ReadLine();
+                var username = _configuration?.GetValue<string>("Username");
+                if (username == null)
+                {
+                    Console.Write("Username: ");
+                    username = Console.ReadLine();
+                }
+                var password = _configuration?.GetValue<string>("Password");
+                if (password == null)
+                {
+                    Console.Write("Password: ");
+                    password = Console.ReadLine();
+                }
                 Console.WriteLine($"Logging into {_sdkClientSettings.BaseUrl}");
 
                 // Authenticate user.
