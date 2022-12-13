@@ -131,13 +131,8 @@ public class SampleService
             }
         }
         while (!validUser);
-
         
-        //await PrintViews(userDto.Id)
-        //    .ConfigureAwait(false);
-
-
-
+        
         var showName = "";
         do
         {
@@ -150,30 +145,10 @@ public class SampleService
 
     }
 
-    private async Task PrintViews(Guid userId)
-    {
-        try
-        {
-            var views = await _userViewsClient.GetUserViewsAsync(userId)
-                .ConfigureAwait(false);
-            Console.WriteLine("Printing Views:");
-            foreach (var view in views.Items)
-            {
-                Console.WriteLine($"{view.Id} - {view.Name}");
-            }
-        }
-        catch (UserViewsException ex)
-        {
-            await Console.Error.WriteLineAsync("Error getting user views").ConfigureAwait(false);
-            await Console.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
-        }
-    }
-    
     private async Task PrintShowInfo(Guid userId, string showName)
     {
         try
         {
-
             var includeItemTypes = new BaseItemKind[]{BaseItemKind.Series};
 
             var shows = await _itemsClient.GetItemsAsync(userId, includeItemTypes:includeItemTypes, recursive:true)
@@ -192,26 +167,10 @@ public class SampleService
                     Console.WriteLine("found it!!!");
                 }
             }
-
             
             var episodes = await _tvShowsClient.GetEpisodesAsync(usedshow.Id, enableImages:false);
             Console.WriteLine("got eps!!!");
-            var paths = new List<string>();
-
-            foreach(var episode in episodes.Items)
-            {
-                Console.WriteLine($"{episode.Id} - {episode.Name} - {episode.RunTimeTicks}");
-                var path = $"{_libraryClient.GetDownloadUrl(episode.Id)}?api_key={_sdkClientSettings.AccessToken}";
-                paths.Add(path);
-                Console.WriteLine(path);
-
-            }
-
-            await MakeTvFile(paths, usedshow.Name);
-
-            //var usedep = episodes.Items[0];
-            
-            //Console.WriteLine(JsonSerializer.Serialize(usedep));
+            await MakeTvFile(episodes.Items, usedshow.Name);
             
         }
         catch (Exception ex)
@@ -221,29 +180,29 @@ public class SampleService
         }
     }
 
-    private async Task MakeTvFile(List<string> paths, string name)
+    private async Task MakeTvFile(IReadOnlyList<BaseItemDto> episodes, string name, int number = 0)
     {
         var channel = new Channel();
         channel.Name = name;
-        channel.Number = 666;
+        channel.Number = number;
         channel.playlist.Clear();
-        foreach(var path in paths)
+
+
+        foreach(var episode in episodes)
         {
             var entry = new PlaylistEntry();
+            var path = $"{_libraryClient.GetDownloadUrl(episode.Id)}?api_key={_sdkClientSettings.AccessToken}";
             entry.Path = path;
             entry.PathType = PathType.ABSOLUTE;
-            entry.Length = -1;
+            var length = episode.RunTimeTicks != null ? (long)episode.RunTimeTicks / 10000 : -1;
+            entry.Length = length;
             channel.playlist.Add(entry);
         }
 
         Console.WriteLine($"Making channel: {channel.Name}");
 
-        //Console.WriteLine(channel.ToString());
-
         var json = JsonConvert.SerializeObject(channel, Formatting.Indented);
 
-        //Console.WriteLine("JSON");
-        //Console.WriteLine(json);
 
         using StreamWriter file = new($"{channel.Name}.tv");
         {
